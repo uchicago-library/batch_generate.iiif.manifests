@@ -1,0 +1,124 @@
+    """
+        scanned_files = _find_issues(parsed_args.path_to_issues)
+        for n in scanned_files:
+            identifier = n.split("mvol")[1]
+            identifier = identifier.split("/")
+            identifier[0] = "mvol"
+            series = identifier[0] + '-' + identifier[1]
+            series_info = METADATA[series]
+            title = series_info["title"]
+            description = series_info["description"]
+            issue = identifier[-1].lstrip('0')
+            volume = identifier[-2].lstrip('0')
+            if issue == "":
+                issue = "0"
+            identifier = "-".join(identifier)
+            outp = {}
+            manifest_id = uuid4().urn.split(":")[-1]
+            outp["@context"] = "http://iiif.io/api/presentation/2/context.json"
+            outp["@id"] = "http://" + manifest_id
+            outp["@type"] = "sc:Manifest"
+            outp["label"] = title
+
+            outp["metadata"] = []
+            outp["metadata"].append({"label": "Title", "value": series_info["title"]})
+            outp["metadata"].append({"label": "Identifier", "value": identifier})
+            outp["description"] = series_info["description"]
+            outp["license"] = "http://campub.lib.uchicago.edu/rights/"
+            outp["attribution"] = "University of Chicago Library"
+            if "mvol-0004" in identifier:
+                spcl_issue = identifier.split('-')[-1]
+                month = spcl_issue[0:2]
+                date = spcl_issue[2:4].zfill(2)
+                publication_date = [volume, date, month]
+                publication_date = '-'.join(publication_date)
+                title = series_info["title"] + ", " + publication_date
+
+            else:
+                dc_file_path = join(n, identifier + ".dc.xml")
+                if exists(dc_file_path):
+                    root = ElementTree.parse(dc_file_path).getroot()
+                    date = root.find("date").text
+                    outp["metadata"].append({"label": "Date", "value": date})
+                else:
+                    outp["metadata"].append({"label": "volume", "value": volume})
+                    outp["metadata"].append({"label": "issue", "value": issue})
+                title = series_info["title"] + volume + ":" + issue
+                publication_date = date
+            outp["metadata"].append({"label": "Date", "value": publication_date})
+            outp["sequences"] = []
+            outp["structures"] = []
+            outp["viewingDirection"] = "left-to-right"
+
+            sequence = {}
+            sequence_id = uuid4().urn.split(":")[-1]
+            sequence["@id"] = "http://" + sequence_id
+            sequence["@type"] = "sc:Sequence"
+            sequence["canvases"] = []
+            try:
+                n_path = join(n, "tif")
+                tif_dirname = "tif"
+                pages = listdir(n_path)
+            except:
+                n_path = join(n, "TIFF")
+                tif_dirname = "TIFF"
+                pages = listdir(n_path)
+            pages = [x.split(".tif")[0] for x in pages]
+            pages_data = []
+            for x in pages:
+                if 'OCRJob' in x or 'Thumbs' in x:
+                    pass
+                else:
+                    num = x.split(".tif")[0]
+                    if tif_dirname == "TIFF":
+                        try:
+                            num = num.split('_')[1]
+                            num = num.lstrip('0')
+                            pages_data.append({"number": int(num), "loc":identifier.replace('-','/') + '/' + tif_dirname + '/' + x})
+                        except IndexError:
+                            print("{} couldn't be split".format(num))
+            pages_data = sorted(pages_data, key=lambda x: x["number"])
+            for page in pages_data:
+                the_img = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files", page["loc"] + ".tif")
+                try:
+                    img = Image.open(the_img)
+                    width, height = img.size
+                except OSError:
+                    print("{} could not be opened to get size info")
+                a_canvas = {}
+                canvas_id = uuid4().urn.split(":")[-1]
+                a_canvas["@id"] = "http://" + canvas_id
+                a_canvas["@type"] = "sc:Canvas"
+                a_canvas["label" ] = "Page " + str(page["number"])
+                a_canvas["height"] = height
+                a_canvas["width"] =  width
+                a_canvas["images"] = []
+                an_img = {}
+                an_img["@context"] = "http://iiif.io/api/presentation/2/context.json"
+                img_id = uuid4().urn.split(":")[-1]
+                an_img["@id"] = "http://" + img_id
+                an_img["@type"] = "oa:Annotation"
+                an_img["motivation"] = "sc:Painting"
+                an_img["resource"] = {}
+                an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + page["loc"] +  ".tif/full/full/0/default.jpg"
+                an_img["resource"]["@type"] = "dctypes:Image"
+                an_img["resource"]["format"] = "image/jpeg"
+                an_img["resource"]["height"] = height
+                an_img["resource"]["width"] = width
+                an_img["on"] = "http://" + canvas_id
+                an_img["resource"]["service"] = {}
+                an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
+                an_img["resource"]["service"]["@id"] = "https://iiif-server.lib.uchicago.edu/" + page["loc"] +  ".tif"
+                img_profile = {}
+                img_profile["supports"] = ["canonicalLinkHeader", "profileLinkHeader", "mirroring", "rotationArbitrary", "regionSquare", "sizeAboveFull"]
+                img_profile["qualities"] = ["default", "gray", "bitonal"]
+                img_profile["format"] = ["jpg", "png", "gif", "webp"]
+                an_img["resource"]["service"]["profile"] = ["http://iiif.io/api/image/2/level2.json", img_profile]
+                a_canvas["images"].append(an_img)
+                sequence["canvases"].append(a_canvas)
+            outp["sequences"].append(sequence)
+            json_file_name = identifier + ".json"
+            json_file_path = join(getcwd(), "manifests", json_file_name)
+            with open(json_file_path, "w+", encoding="utf-8") as write_file:
+                json.dump(outp, write_file, indent=4)
+    """
