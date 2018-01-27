@@ -150,6 +150,8 @@ def _main():
                 outp["description"] = descriptions[0]
             outp["license"] = ""
             outp["attribution"] = "University of Chicago Library"
+            outp["viewingDirection"] = "left-to-right"
+            outp["viewingHint"] = "non-paged"
             outp["sequences"] = []
             seq_id = uuid4().urn.split(":")[-1]
             a_seq = {}
