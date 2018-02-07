@@ -4,3 +4,13 @@
 build/*
 dist/*
 manifests/*
+*xml
+*txt
+*json
+sorted*
+speculum*
+chopin_metadata/*
+chopin_files/*
+gms_emergency*
+*csv
+
