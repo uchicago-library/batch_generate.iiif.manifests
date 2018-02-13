@@ -7,77 +7,8 @@ import re
 import string
 from uuid import uuid4
 from xml.etree import ElementTree
+from urllib.parse import quote
 
-"""
-{
-  "@context": "http://iiif.io/ai/presentations/2/context.json",
-  "@id": "http:///[id]",
-  "@type": "sc:Manifest",
-  "label": "[label]",
-  "metadata": [
-  ],
-  "description": "[description]",
-  "license": "http://creativecommons.org/licenses/by/3.0/",
-  "attributation": "[attribution text]",
-  "sequences": [
-      {
-          "@id": "http://[id of sequence]",
-          "@type": "sc:Sequence",
-          "label": "Normal Sequence",
-          "canvases": [
-              {
-                "@id": "http:/[id of canvas]",
-                "@type": "sc:Canvas",
-                "label": "Page [number]",
-                "height": [height of canvas],
-                "width": [width of canvas],
-                "images": [
-                    {
-                        "@context": "http://iiif.io/api/presentation/2/context.json",
-                        "@id": "http://[id of image]",
-                        "@type": "oa:Annotation",
-                        "motivation": "sc:Painting",
-                        "resource": {
-                            "@id": [uri for a iiif image]",
-                            "@type": "dctypes:Image",
-                            "format": "image/jpeg",
-                            "service": {
-                                "@context": "http://iiif.io/api/image/2/context.json",
-                                "@id": "[uri for the iiif image]",
-                                "profile": [
-                                    "http://iiif.io/api/image/2/level2.json",
-                                    {
-                                        "supports": [
-                                           "conanicalLinkHeader",
-                                           "profileLinkHeader",
-                                           "mirroring",
-                                           "rotationArbitrary",
-                                           "regionSquare",
-                                           "sizeAboveFull"
-                                        ],
-                                        "qualities": [
-                                            "default",
-                                            "gray",
-                                            "bitonal"
-                                        ],
-                                        "formats": [
-                                            "jpg",
-                                            "png",
-                                            "gif",
-                                            "webp"
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                ]
-              }
-          ]
-      }
-  ]
-}
-"""
 def _find_all_apf_chos(path):
     for a_thing in scandir(path):
         if a_thing.is_dir():
@@ -111,13 +42,16 @@ def _main():
             dates = None
             formats = None
             main_identifier = n.split("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/")[1]
+            flat_identifier = main_identifier.split(".tif")[0] + ".json"
+            print(flat_identifier)
+            manifest_id = "https://iiif-manifest.lib.uchicago.edu/" + flat_identifier
             outp = {}
-            manifest_id = uuid4().urn.split(":")[-1]
             outp["@context"] = "http://iiif.io/api/presentation/2/context.json"
-            outp["@id"] = "http://" + manifest_id
+            outp["@id"] = manifest_id
             outp["@type"] = "sc:Manifest"
             outp["metadata"] = []
             outp["license"] = "http://photoarchive.lib.uchicago.edu/rights.html"
+            outp["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
             outp["attribution"] = "University of Chicago Library"
             for m in metadata:
                 if basef in m:
@@ -128,11 +62,11 @@ def _main():
                     identifiers = [x.text for x in root.findall("{http://purl.org/dc/elements/1.1/}identifier")]
                     subjects = [x.text for x in root.findall("{http://purl.org/dc/elements/1.1/}subject")]
                     formats = [x.text for x in root.findall("{http://purl.org/dc/elements/1.1/}format")]
-
                     description = root.find("{http://purl.org/dc/elements/1.1/}description")
-                    if description:
+                    if description == None:
+                        print(m)
+                    else:
                         outp["description"] = description.text
-                        print(description)
                     for title in titles:
                         outp["metadata"].append({"label": "Title", "value": title})
                     for creator in creators:
@@ -140,22 +74,29 @@ def _main():
                     for date in dates:
                         outp["metadata"].append({"label": "Date", "value": date})
                     for identifier in identifiers:
-                        outp["metadata"].append({"label": "Identifiers", "value": identifier})
+                        outp["metadata"].append({"label": "Identifier", "value": identifier})
                     for subject in subjects:
                         outp["metadata"].append({"label": "Subject", "value": subject})
                     for format in formats:
                         outp["metadata"].append({"label": "Format", "value": format})
-                    outp["label"] = titles[0]
+                    if len(titles) == 4:
+                       outp["label"] = titles[2] + " " + titles[0] + ", " + titles[3]
+                    elif len(titles) == 3:
+                       outp["label"] = titles[2] + " " + titles[0]
+                    else:
+                        print(title)
                     break
             outp["sequences"] = []
             outp["structures"] = []
             outp["viewingDirection"] = "left-to-right"
             sequence = {}
             sequence_id = uuid4().urn.split(":")[-1]
-            sequence["@id"] = "http://" + sequence_id
+            sequence_id = manifest_id + "/sequences/" + sequence_id
+            sequence["@id"] = sequence_id
             sequence["@type"] = "sc:Sequence"
             sequence["canvases"] = []
             canvas_id = uuid4().urn.split(":")[-1]
+            canvas_id = sequence_id + "/canvases/" + canvas_id
             the_img = n
             try:
                 img = Image.open(the_img)
@@ -165,9 +106,8 @@ def _main():
             except Image.DecompressionBombError:
                 print("{} got a DecompressionBombError".format(the_img))
             a_canvas = {}
-            a_canvas["@id"] = "http://" + canvas_id
+            a_canvas["@id"] = canvas_id
             a_canvas["@type"] = "sc:Canvas"
-            a_canvas["label" ] = "Photograph of " + title
             a_canvas["height"] = height
             a_canvas["width"] =  width
             a_canvas["images"] = []
@@ -180,13 +120,13 @@ def _main():
             an_img["motivation"] = "sc:Painting"
             an_img["resource"] = {}
             n_path = n.split("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/")[1]
-            print(n_path)
+            n_path = quote(n_path, safe="")
             an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + n_path +  "/full/full/0/default.jpg"
             an_img["resource"]["@type"] = "dctypes:Image"
             an_img["resource"]["format"] = "image/jpeg"
             an_img["resource"]["height"] = height
             an_img["resource"]["width"] = width
-            an_img["on"] = "http://" + canvas_id
+            an_img["on"] = canvas_id
             an_img["resource"]["service"] = {}
             an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
             an_img["resource"]["service"]["@id"] = "https://iiif-server.lib.uchicago.edu/" + n_path
@@ -206,7 +146,6 @@ def _main():
                 new = join(new, n)
                 if not exists(new):
                     mkdir(new)
-            print(json_file_path)
             with open(json_file_path, "w+", encoding="utf-8") as write_file:
                 json.dump(outp, write_file, indent=4)
         return 0

@@ -6,6 +6,7 @@ import re
 from shutil import copyfile
 from uuid import uuid4
 from xml.etree import ElementTree
+from urllib.parse import quote
 
 def find_particular_tif_files(path, pattern=None):
     for something in scandir(path):
@@ -44,14 +45,16 @@ if __name__ == "__main__":
     empty_locs = 0
     unique_locs = set([])
     for work in works:
-        manifest_id = uuid4().urn.split(":")[-1]
+        source_id = work.attrib["id"]
+        manifest_id = "https://iiif-manifest.lib.uchicago.edu/speculum/" +  source_id + "/" + source_id + ".json"
+        print(manifest_id)
         outp = {}
         outp["@context"] = "http://iiif.io/api/presentation/2/context.json"
-        outp["@id"] = "http://" + manifest_id
+        outp["@id"] = manifest_id
         outp["@type"] = "sc:Manifest"
         metadata = []
 
-        source_id = work.attrib["id"]
+
         geographic_name = work.find("locationSet/location[@type='creation']/name")
         subjects = work.findall("subjectSet/subject/term")
         agents = work.findall("agentSet/agent")
@@ -77,7 +80,6 @@ if __name__ == "__main__":
             desc = clean_text_data(descriptions[0])
             if desc:
                 outp["description"] = desc
-                make_metadata_definition("Description", desc, metadata=metadata)
         else:
             pass
         technique = work.find("techniqueSet/display")
@@ -124,15 +126,18 @@ if __name__ == "__main__":
                     key_name = "Text"
                 if position_text:
                     key_name += " ({})".format(position_text)
+        outp["attribution"] = "University of Chicago Library"
+        outp["license"] = "https://creativecommons.org/licenses/by-nc/4.0/"
+        outp["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
         outp["metadata"] = metadata
         outp["sequences"] = []
         sequence_id = uuid4().urn.split(":")[-1]
+        sequence_id = manifest_id + "/sequences/" + sequence_id
         a_seq = {}
-        a_seq["@id"] = "http://" + sequence_id
+        a_seq["@id"] = sequence_id
         a_seq["@type"] = "sc:Sequence"
         a_seq["canvases"] = []
         chos = scandir(join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/speculum"))
-        print(source_id)
         for a_directory in chos:
             if source_id in a_directory.path:
                 tifs = scandir(join(a_directory.path, "tifs"))
@@ -155,10 +160,13 @@ if __name__ == "__main__":
                             a_canvas["width"] = width
 
                     tif_id = the_img.split(join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/"))[1]
+                    tif_id = quote(tif_id)
+                    tif_id = quote(tif_id, safe="")
                     print(tif_id)
                     a_canvas = {}
                     canvas_id = uuid4().urn.split(":")[-1]
-                    a_canvas["@id"] = "http://" + canvas_id
+                    canvas_id = sequence_id + "/canvases/" + canvas_id
+                    a_canvas["@id"] = canvas_id
                     a_canvas["@type"] = "sc:Canvas"
                     a_canvas["label" ] = "Image"
                     a_canvas["height"] = height
@@ -176,7 +184,7 @@ if __name__ == "__main__":
                     an_img["resource"]["format"] = "image/jpeg"
                     an_img["resource"]["height"] = height
                     an_img["resource"]["width"] = width
-                    an_img["on"] = "http://" + canvas_id
+                    an_img["on"] =  canvas_id
                     an_img["resource"]["service"] = {}
                     an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
                     an_img["resource"]["service"]["@id"] = "https://iiif-server.lib.uchicago.edu/" + tif_id

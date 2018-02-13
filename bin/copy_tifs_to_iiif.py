@@ -11,6 +11,7 @@ from pymarc import MARCReader
 from pymarc.exceptions import RecordLengthInvalid
 from PIL import Image
 from uuid import uuid4
+from urllib.parse import quote
 
 def main():
     arguments = ArgumentParser()
@@ -27,25 +28,7 @@ def main():
             outp["@type"] = "sc:Manifest"
             outp["metadata"] = []
             identifier = 'gms-' + n.zfill(4)
-
             metadata_records[identifier] = []
-            """
-            tif_files = data[n]["files"]
-            dest_root = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/goodspeed", identifier)
-            dest_tif_root = join(dest_root, "tifs")
-            if not exists(dest_root):
-                mkdir(dest_root)
-            if not exists(dest_tif_root):
-                mkdir(dest_tif_root)
-            for a_tif in tif_files:
-                src = a_tif
-                dest = basename(a_tif)
-                dest = join(dest_tif_root, dest)
-                if not exists(dest):
-                    copyfile(src, dest)
-                else:
-                    print("{}->{}".format(src,dest))
-            """
             tei_metadata = data[n]["tei_metadata_file"]
             marc_metadata = data[n]["marc_metadata_file"]
             metadata = []
@@ -91,7 +74,8 @@ def main():
             else:
                 pass
                 #stdout.write("{} has no descriptive metadata: this is an orphaned manuscript\n".format(identifier))
-            outp["license"] = ""
+            outp["license"] = "https://creativecommons.org/licenses/by-nc/4.0/"
+            outp["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
             outp["attribution"] = "University of Chicago Library"
             outp["viewingDirection"] = "left-to-right"
             outp["viewingHint"] = "paged"
@@ -105,7 +89,6 @@ def main():
             tifs = scandir(tif_directory)
             tifs = sorted([x.path for x in tifs])
             for tif in tifs:
-                print(tif)
                 tif_path = tif.split("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/")[1]
                 a_canvas = {}
                 label_string = tif_path.split(".tif")[0].split("-")[-1]
@@ -139,7 +122,10 @@ def main():
                     an_img["motivation"] = "sc:Painting"
                     an_img["resource"] = {}
                     tif_id = tif_path
+                    tif_id = quote(tif_id, safe="")
+                    print(tif_id)
                     an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + tif_id +  "/full/full/0/default.jpg"
+                    print(an_img["resource"]["@id"])
                     an_img["resource"]["service"] = {}
                     an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
                     an_img["resource"]["service"]["@id"] = "https://iiif-server.lib.uchicago.edu/" + tif_id
@@ -154,6 +140,7 @@ def main():
             identifier_parts = identifier.split('-')
             identifier_parts = '/'.join(identifier_parts)
             json_filepath = join(getcwd(), "manifests", identifier_parts, identifier + ".json")
+            print(json_filepath)
             json_dirs = dirname(json_filepath)
             new = "/"
             for a_dir in json_dirs.split('/'):

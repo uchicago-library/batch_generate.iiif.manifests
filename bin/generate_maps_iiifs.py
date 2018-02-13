@@ -1,5 +1,6 @@
 from argparse import ArgumentParser
 from os import _exit, scandir, listdir, getcwd, makedirs, mkdir
+from urllib.parse import quote
 from os.path import exists, join, basename, dirname
 import json
 import magic
@@ -11,76 +12,6 @@ import string
 from uuid import uuid4
 from xml.etree import ElementTree
 
-"""
-{
-  "@context": "http://iiif.io/ai/presentations/2/context.json",
-  "@id": "http:///[id]",
-  "@type": "sc:Manifest",
-  "label": "[label]",
-  "metadata": [
-  ],
-  "description": "[description]",
-  "license": "http://creativecommons.org/licenses/by/3.0/",
-  "attributation": "[attribution text]",
-  "sequences": [
-      {
-          "@id": "http://[id of sequence]",
-          "@type": "sc:Sequence",
-          "label": "Normal Sequence",
-          "canvases": [
-              {
-                "@id": "http:/[id of canvas]",
-                "@type": "sc:Canvas",
-                "label": "Page [number]",
-                "height": [height of canvas],
-                "width": [width of canvas],
-                "images": [
-                    {
-                        "@context": "http://iiif.io/api/presentation/2/context.json",
-                        "@id": "http://[id of image]",
-                        "@type": "oa:Annotation",
-                        "motivation": "sc:Painting",
-                        "resource": {
-                            "@id": [uri for a iiif image]",
-                            "@type": "dctypes:Image",
-                            "format": "image/jpeg",
-                            "service": {
-                                "@context": "http://iiif.io/api/image/2/context.json",
-                                "@id": "[uri for the iiif image]",
-                                "profile": [
-                                    "http://iiif.io/api/image/2/level2.json",
-                                    {
-                                        "supports": [
-                                           "conanicalLinkHeader",
-                                           "profileLinkHeader",
-                                           "mirroring",
-                                           "rotationArbitrary",
-                                           "regionSquare",
-                                           "sizeAboveFull"
-                                        ],
-                                        "qualities": [
-                                            "default",
-                                            "gray",
-                                            "bitonal"
-                                        ],
-                                        "formats": [
-                                            "jpg",
-                                            "png",
-                                            "gif",
-                                            "webp"
-                                        ]
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                ]
-              }
-          ]
-      }
-  ]
-}
-"""
 def _find_all_mepa_chos(path):
     for a_thing in scandir(path):
         if a_thing.is_dir():
@@ -139,13 +70,13 @@ def _main():
             if author:
                 outp["metadata"].append({"label": "Author", "value": author})
             if date:
-                outp["metadata"].append({"label": "Author", "value": date})
+                outp["metadata"].append({"label": "Date", "value": date})
             if publisher:
                 outp["metadata"].append({"label": "Publisher", "value": publisher})
             if descriptions:
-                outp["metadata"].append({"label": "Description", "value": descriptions[0]})
                 outp["description"] = descriptions[0]
-            outp["license"] = ""
+            outp["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
+            outp["license"] = "https://creativecommons.org/licenses/by-nc/4.0/"
             outp["attribution"] = "University of Chicago Library"
             outp["viewingDirection"] = "left-to-right"
             outp["viewingHint"] = "non-paged"
@@ -225,7 +156,7 @@ def _main():
                     an_img["motivation"] = "sc:Painting"
                     an_img["resource"] = {}
                     tif_id = the_img.split("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/")[1]
-                    print(tif_id)
+                    tif_id = quote(tif_id, safe="")
                     an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + tif_id +  "/full/full/0/default.jpg"
                     an_img["resource"]["service"] = {}
                     an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
@@ -270,6 +201,7 @@ def _main():
                 an_img["motivation"] = "sc:Painting"
                 an_img["resource"] = {}
                 tif_id = the_img.split("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/")[1]
+                tif_id = quote(tif_id, safe="")
                 an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + tif_id +  "/full/full/0/default.jpg"
                 an_img["resource"]["service"] = {}
                 an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
@@ -286,7 +218,7 @@ def _main():
             json_filepath = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Manifests", json_filepath)
             json_filepath_dirs = dirname(json_filepath)
             print(json_filepath)
-            with open(json_filepath, "w+", encoding="utf-8") as write_file:
+            with open(json_filepath, "w+") as write_file:
                 json.dump(outp, write_file, indent=4)
         return 0
     except KeyboardInterrupt:

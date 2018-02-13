@@ -11,6 +11,7 @@ from pymarc import MARCReader
 from pymarc.exceptions import RecordLengthInvalid
 from PIL import Image
 from uuid import uuid4
+from urllib.parse import quote
 
 def main():
     arguments = ArgumentParser()
@@ -32,7 +33,8 @@ def main():
             outp["label"] = n["title"]
             outp["metadata"].append({"label": "Alternate Title", "value": n["alt_title"]})
             outp["metadata"].append({"label": "Identifier", "value": n["identifier"]})
-            outp["license"] = ""
+            outp["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
+            outp["license"] = "https://creativecommons.org/licenses/by-nc/4.0/"
             outp["attribution"] = "University of Chicago Library"
             outp["viewingDirection"] = "left-to-right"
             outp["viewingHint"] = "paged"
@@ -40,7 +42,7 @@ def main():
             seq_id = uuid4().urn.split(":")[-1]
             a_seq = {}
             a_seq["@id"] = "http://" + seq_id
-            a_seq["@type"] = "sc:Sequence"
+            a_seq["@type"] = "sc:Sequence" 
             a_seq["canvases"] = []
             tif_directory = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files", "rac", str(identifier).zfill(4), "tifs")
             tifs = scandir(tif_directory)
@@ -79,7 +81,7 @@ def main():
                     an_img["motivation"] = "sc:Painting"
                     an_img["resource"] = {}
                     tif_id = tif_path
-                    print(tif_id)
+                    tif_id = quote(tif_id, safe="")
                     an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + tif_id +  "/full/full/0/default.jpg"
                     an_img["resource"]["service"] = {}
                     an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
@@ -91,6 +93,8 @@ def main():
                     an_img["resource"]["service"]["profile"] = ["http://iiif.io/api/image/2/level2.json", img_profile]
                     a_canvas["images"].append(an_img)
                     a_seq["canvases"].append(a_canvas)
+                else:
+                    print(tif_path)
             outp["sequences"].append(a_seq)
             identifier_parts = identifier.split('-')
             identifier_parts = '/'.join(identifier_parts)
@@ -103,7 +107,7 @@ def main():
                     pass
                 else:
                     mkdir(new)
-            with open(json_filepath, "w+", encoding="utf-8") as wf:
+            with open(json_filepath, "w+") as wf:
                 json.dump(outp, wf, indent=4)
         return 0
     except KeyboardInterrupt:

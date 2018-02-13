@@ -1,6 +1,7 @@
 from argparse import ArgumentParser
 import csv
-from os import _exit, listdir, scandir, getcwd, mkdir
+import magic
+from os import _exit, listdir, scandir, getcwd, mkdir, remove
 from os.path import join, basename, exists, dirname
 from shutil import copyfile
 import re
@@ -15,11 +16,47 @@ from uuid import uuid4
 def main():
     arguments = ArgumentParser()
     arguments.add_argument("mods_metadata_loc", action='store', type=str)
+    arguments.add_argument("orig_metadata_loc", action='store', type=str)
     arguments.add_argument("tifs_loc", action='store', type=str)
     parsed_args = arguments.parse_args()
     try:
-        mods_files = scandir(parsed_args.mods_metadata_loc)
+        mods_files = [x.path for x in scandir(parsed_args.mods_metadata_loc)]
+        orig_files = [x.path for x in scandir(parsed_args.orig_metadata_loc)]
         tif_dirs = [x.path for x in scandir(parsed_args.tifs_loc)]
+        for n in mods_files:
+            mdata_type, project, record = basename(n).split('.')[0].split('-')
+            tif_id = project + record
+            tifs = [x for x in tif_dirs if tif_id in x]
+            if not tifs:
+                print(tif_id)
+        no_orig = 0
+        no_mods = 0
+        records = []
+        for n in tif_dirs:
+            record = []
+            record_id = basename(n).split("chopin")[1]
+            mods = [x for x in mods_files if record_id in x]
+            orig = [x for x in orig_files if record_id in x]
+            record.append(record_id)
+            record.append(len([x for x in scandir(n)]))
+            if not mods:
+                no_mods += 1
+                record.append(False)
+            else:
+                record.append(True)
+            if not orig:
+                no_orig += 1
+                record.append(False)
+            else:
+                record.append(True)
+            records.append(record)
+        with open(join(getcwd(), "chopin_tif_report.csv"), "w+", encoding="utf-8") as wf:
+            writer = csv.writer(wf, quoting=csv.QUOTE_MINIMAL, quotechar='"', delimiter=',')
+            for record in records:
+                writer.writerow(record)
+        print("total without mods=" + str(no_mods))
+        print("total without original=" + str(no_orig))
+        """
         organization = []
         for n in mods_files:
             an_org = {}
@@ -35,7 +72,7 @@ def main():
             organization.append(an_org)
         json_filepath = join(getcwd(), "chopin_org.json")
         print(json_filepath)
-        total_n = 0 
+        total_n = 0
         total_tifs = 0
         for n in organization:
             total_n += 1
@@ -49,13 +86,23 @@ def main():
                 mkdir(n_cho_dir)
             if not exists(n_cho_tifs):
                 mkdir(n_cho_tifs)
-            tifs = n["tif_files"]
-            for a_tif in tifs:
-                total_tifs += 1
-                src = a_tif
-                dest = identifier + '-' + basename(src).split('.tif')[0].split('-')[1] + ".tif.bz2"
-                dest = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files", "chopin", identifier, "tifs", dest)
-                new = "/"
+            tifs = [x for x in scandir(n_cho_tifs)]
+            bz2_files = [x for x in tifs if x.path.endswith("bz2")]
+            if bz2_files:
+                for a_tif in tifs:
+                    total_tifs += 1
+                    src = a_tif
+                    if src.path.endswith("bz2"):
+                        mf = magic.from_file(src.path, mime=True)
+                        if mf == 'image/tiff':
+                            dest = basename(src.path).split('.bz2')[0]
+                            dest = join(n_cho_tifs, dest)
+                            if exists(dest):
+                                remove(src)
+
+                #dest = identifier + '-' + basename(src).split('.tif')[0].split('-')[1] + ".tif.bz2"
+                #dest = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files", "chopin", identifier, "tifs", dest)
+                #new = "/"
                 #for n in dirname(dest).split("/"):
                 #    new = join(new, n)
                 #    if not exists(new):
@@ -68,6 +115,7 @@ def main():
 
         #for n in tif_dirs:
         #    print(n)
+        """
 
         """
         data = json.load(open(parsed_args.group_file, "rb"))
