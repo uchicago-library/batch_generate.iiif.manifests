@@ -203,7 +203,7 @@ def _main():
                 else:
                     outp["metadata"].append({"label": "volume", "value": volume})
                     outp["label"] = title + ", volume " + volume + ", issue " + issue
-                title = series_info["title"] + volume + ":" + issue
+                title = series_info["title"] + " volume " + volume + ", issue " + issue
                 outp["label"] = title
 
             outp["sequences"] = []

@@ -27,75 +27,97 @@ def main():
     parsed_args = arguments.parse_args()
     try:
         itinerary_info = json.load(open(parsed_args.itinerary_data, "rb"))
+
+        itineraries_collection_id = "itineraries.json"
+        itineraries_collection_uri = "https://iiif-collection.lib.uchicago.edu/speculum/" + itineraries_collection_id
+        itineraries_collection_filepath = join(getcwd(), "manifests" , "speculum", itineraries_collection_id)
+        itineraries_collection = {}
+        itineraries_collection["@context"] = "http://iiif.io/api/presentation/2/context.json"
+        itineraries_collection["@id"] = itineraries_collection_uri
+        itineraries_collection["@type"] = "sc:Collection"
+        itineraries_collection["label"] = "Itineraries"
+        itineraries_collection["description"] = "Virtual itineraries are mini-exhibitions designed by scholars that allow you to travel through the collection along a particular path based on a theme, location, collection, or artist. These allow for a more specialized, but still lively and accessible, introduction to selected works from the collection, draw attention to particular intellectual questions associated with these prints, and serve as a new mode of scholarly publishing."
+        itineraries_collection["viewingHint"] = "individuals"
+        itineraries_collection["license"] = ""
+        itineraries_collection["attribution"] = "University of Chicago Library"
+        itineraries_collection["members"] = []
         count = 1
         for an_itinerary in itinerary_info["itineraries"]:
             manifest_id = uuid4().urn.split(":")[-1]
             outp = {}
+            itinerary_id = 'itinerary-' + str(count)
+            itinerary_filepath = join(getcwd(), "manifests", "speculum", "itineraries", itinerary_id + ".json")
+            itinerary_uri = "https://iiif-collection.lib.uchicago.edu/speculum/itineraries/" + itinerary_id + ".json"
+            itinerary_pkg = {}
+            itinerary_pkg["@id"] = itinerary_uri
+            itinerary_pkg["@type"] = "sc:Collection"
+            itinerary_pkg["label"] = an_itinerary["title"]
+
+            itineraries_collection["members"].append(itinerary_pkg)
+
             outp["@context"] = "http://iiif.io/api/presentation/2/context.json"
-            outp["@id"] = "http://" + manifest_id
-            outp["@type"] = "sc:Manifest"
+            outp["@id"] = itinerary_uri
+            outp["@type"] = "sc:Collection"
+            outp["label"] = an_itinerary["title"]
+            outp["description"] = an_itinerary["description"]
+            outp["viewingHint"] = "multi-part"
             outp["metadata"] = []
+            for n in an_itinerary["creators"]:
+                outp["metadata"].append({"label": "Creator", "value": n["name"] + ", " + n["title"] + ", " + n["institution"]})
             outp["license"] = ""
             outp["attribution"] = "University of Chicago Library"
-            outp["sequences"] = []
-            seq_id = uuid4().urn.split(":")[-1]
-            a_seq = {}
-            a_seq["@id"] = "http://" + seq_id
-            a_seq["@type"] = "sc:Sequence"
-            a_seq["canvases"] = []
+            outp["members"] = []
+            item_counter = 1
+            for item in an_itinerary["items"]:
+                # need to get info for item collection record and pkg
+                item_description = item["description"]
+                item_label = item["title"]
+                item_id = itinerary_id + "-" + str(item_counter) + ".json"
+                item_filepath = join(getcwd(), "manifests", "speculum", "itineraries" , item_id)
+                item_uri = "https://iiif-collection.lib.uchicago.edu/speculum/itineraries/" + item_id
 
-            itinerary_title = an_itinerary["title"]
-            itinerary_description = an_itinerary["description"]
-            itinerary_creator = an_itinerary["creators"][0]
-            itinerary_creator = itinerary_creator["name"] + ", " + itinerary_creator["title"] + ", " + itinerary_creator["institution"]
-            outp["label"] = itinerary_title
-            outp["description"] = itinerary_description
-            outp["metadata"].append({"label": "Creator", "value": itinerary_creator})
-            outp["viewingHint"] = "non-paged"
-            outp["viewingDirection"] = "left-to-right"
-            outp["sequences"] = []
-            outp["seeAlso"] = []
-            itinerary_items = an_itinerary["items"]
-            for item in itinerary_items:
-                img_url = None
-                title = None
-                description = None
-                metadata = None
-                new_canvas = {}
+                item_pkg = {}
+                item_pkg["@id"] = item_uri
+                item_pkg["@type"] = "sc:Collection"
+                item_pkg["label"] = item_label
+                item_pkg["viewingHint"] = "multi-part"
+                outp["members"].append(item_pkg)
+
+                item_root = {}
+                item_root["@context"] = "http://iiif.io/api/presentation/2/context.json"
+                item_root["@id"] = item_uri
+                item_root["@type"] = "sc:Collection"
+                item_root["label"] = item_label
+                item_root["description"] = item_description
+                item_root["viewingHint"] = "individuals"
+                item_root["license"] = ""
+                item_root["attribution"] = "University of Chicago Library"
+                item_root["members"] = []
+
                 chicago_numbers = item["id"]
-                if item.get("seeAlso"):
-                    see_alsos = item.get("seeAlso")
-                else:
-                    see_alsos = []
-                for an_also in see_alsos:
-                    for a_manifest in find_manifests(parsed_args.path_to_manifests, an_also):
-                        test = a_manifest
-                        path = a_manifest[0]
-                        url = path.split(parsed_args.path_to_manifests)[1]
-                        url = "https://iiif-manifest.lib.uchicago.edu/speculum" + url
-                        url = "https://universalviewer.io/uv.html?manifest=" + url
-                        outp["seeAlso"].append(url)
                 for number in chicago_numbers:
                     for a_manifest in find_manifests(parsed_args.path_to_manifests, number):
                         test = a_manifest
-                        a_manifest = a_manifest[1]
-                        for a_canvas in a_manifest["sequences"][0]["canvases"]:
-                            new_canvas = a_canvas
-                            new_canvas["label"] = item["title"]
-                            if item.get("description"):
-                                new_metadata = [{"label": "Itinerary Guide Information", "value": item["description"]}]
-                                new_metadata += a_manifest["metadata"]
-                                new_canvas["metadata"] =  new_metadata
-                            else:
-                                new_metadata = a_manifest["metadata"]
-                                new_canvas["metadata"] = a_manifest["metadata"]
-                            a_seq["canvases"].append(new_canvas)
-            outp["sequences"].append(a_seq)
-            json_filepath = join(getcwd(), "itineraries", "speculum-itinerary-" + str(count) + ".json")
-            with open(json_filepath, "w+", encoding="utf-8") as write_file:
+                        member_uri = a_manifest[1]["@id"]
+                        member_label = a_manifest[1]["label"]
+
+                        cho_pkg = {}
+                        cho_pkg["@id"] = member_uri
+                        cho_pkg["@type"] = "sc:Manifest"
+                        cho_pkg["label"] = member_label
+                        cho_pkg["viewingHint"] = "individuals"
+                        item_root["members"].append(cho_pkg)
+
+                # write item itinerary record
+                with open(item_filepath, "w+") as wf:
+                    json.dump(item_root, wf, indent=4)
+                item_counter += 1
+            with open(itinerary_filepath, "w+", encoding="utf-8") as write_file:
                 json.dump(outp, write_file, indent=4)
             count += 1
-            print(json_filepath)
+            print(itinerary_filepath)
+        with open(itineraries_collection_filepath, "w+") as wf:
+            json.dump(itineraries_collection, wf, indent=4)
         return 0
     except  KeyboardInterrupt:
         return 131

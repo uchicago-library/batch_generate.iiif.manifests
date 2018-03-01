@@ -37,20 +37,29 @@ def _main():
     try:
         chos = scandir(parsed_args.path_to_chos)
         chos = [x.path for x in chos]
+        count = 0
         for a_cho in chos:
-            print(a_cho)
-            manifest_id = uuid4().urn.split(":")[-1]
+            cho_id = "{}".format(basename(a_cho))
+            manifest_id = "https://iiif-manifest.lib.uchicago.edu/maps/chicago_1890/" + cho_id + "/" + cho_id + ".json"
             outp = {}
             outp["@context"] = "http://iiif.io/api/presentation/2/context.json"
-            outp["@id"] = "http://" + manifest_id
+            outp["@id"] =  manifest_id
             outp["@type"] = "sc:Manifest"
             outp["metadata"] = []
             tifs = scandir(join(a_cho, "tifs"))
+            for n_tif in tifs:
+                src = n_tif.path
+                dest = basename(n_tif.path)
+                dest = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/maps/", basename(a_cho), "tifs", dest)
+                new = "/"
+                for n_dir in dirname(dest).split('/'):
+                    new = join(new, n_dir)
+                    if not exists(new):
+                        mkdir(new)
+                count += 1
+                #copyfile(src, dest)
             metadata = scandir(join(a_cho, "metadata"))
-            cho_mdata = [x.path for x in metadata]
-            cho_tifs = [x.path for x in tifs]
-            cho_id = basename(a_cho)
-            cho_mdata = sorted(cho_mdata)
+            cho_mdata = [x.path for x in metadata] 
             cho_metadata_file = cho_mdata[-1]
             title = None
             author = None
@@ -65,16 +74,17 @@ def _main():
                     date = record.pubyear()
                     publisher = record.publisher()
             if title:
-                outp["metadata"].append({"label": "Title", "value": title})
                 outp["label"] = title
+                outp["metadata"].append({"label": "Title", "value": title})
             if author:
-                outp["metadata"].append({"label": "Author", "value": author})
-            if date:
-                outp["metadata"].append({"label": "Date", "value": date})
+                outp["metadata"].append({"label": "Creator", "value": author})
+            if descriptions:
+                description_text = '\n'.join(descriptions)
+                outp["description"] = title
             if publisher:
                 outp["metadata"].append({"label": "Publisher", "value": publisher})
-            if descriptions:
-                outp["description"] = descriptions[0]
+            if date:
+                outp["metadata"].append({"label": "Date", "value": date})
             outp["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
             outp["license"] = "https://creativecommons.org/licenses/by-nc/4.0/"
             outp["attribution"] = "University of Chicago Library"
@@ -86,43 +96,39 @@ def _main():
             a_seq["@id"] = "http://" + seq_id
             a_seq["@type"] = "sc:Sequence"
             a_seq["canvases"] = []
-            tifs = scandir(join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/maps/", cho_id, "tifs"))
-            tifs = [x.path for x in tifs]
+            tifs_path = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/maps/", quote(cho_id, safe=""), "tifs")
+            if exists(tifs_path):
+                tifs = scandir(tifs_path)
+                tifs = [x.path for x in tifs]
+            else:
+                pass
+                tifs = []
             if len(tifs) > 1:
                 filler_list = ["" for x in range(len(tifs))]
+                quadrant_definitions = ["NW", "NE", "SW", "SE"]
                 for a_tif in tifs:
-                    try:
-                        f = open(the_img, "rb")
-                        img = Image.open(f)
-                        width, height = img.size
-                    except OSError:
-                        with open(join(getcwd(), "errors.txt"), "a+", encoding="utf-8") as write_file:
-                            write_file.write("{}\n".format(a_file))
-                        height = None
-                        width = None
-                    except Image.DecompressionBombError:
-                        the_info = magic.from_file(the_img)
-                        height = [x for x in the_info if "height=" in x]
-                        width = [x for x in the_info if "width=" in x]
-                        if width and height:
-                            height = height[0].split('=')[1]
-                            width = width[0].split('=')[1]
-                    if a_tif.endswith("NW.tif"):
-                        filler_list[0] = a_tif
-                    elif a_tif.endswith("NE.tif"):
-                        filler_list[1] = a_tif
-                    elif a_tif.endswith("SW.tif"):
-                        filler_list[2] = a_tif
-                    elif a_tif.endswith("SE.tif"):
-                        filler_list[3] = a_tif
-                for an_item in filler_list:
-                    the_img = an_item
+                    the_img = a_tif
                     a_canvas = {}
                     canvas_id = uuid4().urn.split(":")[-1]
                     a_canvas["@context"] = ""
                     a_canvas["@id"] = "http://" + canvas_id
                     a_canvas["@type"] = "sc:Canvas"
-                    a_canvas["label"] = an_item.split('.')[0].split('-')[-1]
+                    a_canvas["label"] = ""
+                    if '-NW' in the_img:
+                        a_canvas["label"] = "NW"
+                    elif '-NE' in the_img:
+                        a_canvas["label"] = "NE"
+                    elif '-SW' in the_img:
+                        a_canvas["label"] = "SW"
+                    elif '-SE' in the_img:
+                       a_canvas["label"] = "SE"
+                    elif '-verso' in the_img:
+                       a_canvas["label"] = "verso"
+                    elif '-recto' in the_img:
+                       a_canvas["label"] = "recto"
+ 
+                    else:
+                        a_canvas["label"] = "A map"
                     try:
                         f = open(the_img, "rb")
                         img = Image.open(f)
@@ -131,7 +137,7 @@ def _main():
                         a_canvas["width"] = width
                     except OSError:
                         with open(join(getcwd(), "errors.txt"), "a+", encoding="utf-8") as write_file:
-                            write_file.write("{}\n".format(a_file))
+                            write_file.write("{}\n".format(the_img))
                     except Image.DecompressionBombError:
                         the_info = magic.from_file(the_img)
                         height = [x for x in the_info if "height=" in x]
@@ -144,7 +150,8 @@ def _main():
                         else:
                             pass
                     try:
-                        print((a_canvas["height"], a_canvas["width"]))
+                        h = a_canvas["height"]
+                        w = a_canvas["width"]
                     except KeyError:
                         a_canvas["height"] = 800
                         a_canvas["width"] = 500
@@ -155,8 +162,8 @@ def _main():
                     an_img["@type"] = "oa:Annotation"
                     an_img["motivation"] = "sc:Painting"
                     an_img["resource"] = {}
-                    tif_id = the_img.split("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/")[1]
-                    tif_id = quote(tif_id, safe="")
+                    tif_id = the_img.split("IIIF_Files")
+                    tif_id = quote(tif_id[1], safe="")
                     an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + tif_id +  "/full/full/0/default.jpg"
                     an_img["resource"]["service"] = {}
                     an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
@@ -168,7 +175,7 @@ def _main():
                     an_img["resource"]["service"]["profile"] = ["http://iiif.io/api/image/2/level2.json", img_profile]
                     a_canvas["images"] = [an_img]
                     a_seq["canvases"].append(a_canvas)
-            else:
+            elif len(tifs) == 1:
                 the_img = tifs[0]
                 a_canvas = {}
                 canvas_id = uuid4().urn.split(":")[-1]
@@ -213,11 +220,61 @@ def _main():
                 an_img["resource"]["service"]["profile"] = ["http://iiif.io/api/image/2/level2.json", img_profile]
                 a_canvas["images"] = [an_img]
                 a_seq["canvases"].append(a_canvas)
+            elif len(tifs) == 0:
+                with open(join(getcwd(), "maps_without_tiffs.txt"), "a+") as af:
+                    af.write("{}\n".format(a_cho))
+            copy = a_seq["canvases"]
+            for n_canvas in a_seq["canvases"]:
+                label = n_canvas["label"]
+                if label == 'NW':
+                    old_first = copy[0]
+                    n_canvas_pos = copy.index(n_canvas)
+                    copy[0] = n_canvas
+                    copy[n_canvas_pos] = old_first
+                elif label == 'NE':
+                    old_first = copy[1]
+                    n_canvas_pos = copy.index(n_canvas)
+                    copy[1] = n_canvas
+                    copy[n_canvas_pos] = old_first
+                elif label == 'SW':
+                    old_first = copy[2]
+                    n_canvas_pos = copy.index(n_canvas)
+                    copy[2] = n_canvas
+                    copy[n_canvas_pos] = old_first
+                elif label == 'SE':
+                    old_first = copy[3]
+                    n_canvas_pos = copy.index(n_canvas)
+                    copy[3] = n_canvas
+                    copy[n_canvas_pos] = old_first
+                if label == 'recto':
+                    old_first = copy[0]
+                    n_canvas_pos = copy.index(n_canvas)
+                    copy[0] = n_canvas
+                    copy[n_canvas_pos] = old_first
+                if label == 'verso':
+                    old_first = copy[1]
+                    n_canvas_pos = copy.index(n_canvas)
+                    copy[1] = n_canvas
+                    copy[n_canvas_pos] = old_first
+                resource_id = n_canvas["images"][0]["resource"]["@id"].lower()
+                matches = [x for x in copy if x["images"][0]["resource"]["@id"].lower() == resource_id]
+                if len(matches) > 1:
+                    valid_op = matches[0]
+                    rest = matches[1:]
+                    for n in rest:
+                        pos = copy.index(n)
+                        del copy[pos]
+
+            a_seq["canvases"] = copy
             outp["sequences"].append(a_seq)
             json_filepath = join("maps", cho_id, cho_id + ".json")
-            json_filepath = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Manifests", json_filepath)
+            json_filepath = join(getcwd(), "manifests", json_filepath)
             json_filepath_dirs = dirname(json_filepath)
-            print(json_filepath)
+            new_json_path = "/"
+            for n in json_filepath_dirs.split("/"):
+                new_json_path = join(new_json_path, n)
+                if not exists(new_json_path):
+                    mkdir(new_json_path)
             with open(json_filepath, "w+") as write_file:
                 json.dump(outp, write_file, indent=4)
         return 0

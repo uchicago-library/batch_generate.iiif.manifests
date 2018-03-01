@@ -52,9 +52,14 @@ def find_all_manifests(path):
 
 def main():
     arguments = ArgumentParser()
-    arguments.add_argument("manifest_root", type=str, action='store')
+    arguments.add_argument("titles_manifest", type=str, action='store')
     parsed_args = arguments.parse_args()
     try:
+        data = None
+        with open(parsed_args.titles_manifest, "r") as rf:
+            data = json.load(rf)
+        print(type(data)
+        """
         collections = scandir(parsed_args.manifest_root)
         manifest_id = uuid4().urn.split(":")[-1]
         manifest = {}
