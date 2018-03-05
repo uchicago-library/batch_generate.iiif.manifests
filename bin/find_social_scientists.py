@@ -1,100 +1,139 @@
 from argparse import ArgumentParser
 import json
-from os import listdir, scandir, getcwd
-from os.path import join
-from uuid import uuid4
+from os import listdir, scandir, getcwd, mkdir
 
-"""
-{
-  "@context": "http://iiif.io/api/presentation/2/context.json",
-  "@id": "http://universalviewer.io/manifests.json",
-  "@type": "sc:Collection",
-  "collections": [
-    {
-      "@context": "http://iiif.io/api/presentation/2/context.json",
-      "@id": "http://universalviewer.io/manifests.json",
-      "@type": "sc:Collection",
-      "label": "University of Chicago - Quarterly Calendar",
-      "manifests": [
-        {
-          "@id": "https://iiif-manifest.lib.uchicago.edu/mvol/mvol-0005-0004-0001.json",
-          "@type": "sc:Manifest",
-          "label": "Quarterly Calendar"
-        }
-      ]
-    },
-    {
-      "@context": "http://iiif.io/api/presentation/2/context.json",
-      "@id": "http://universalviewer.io/manifests.json",
-      "@type": "sc:Collection",
-      "label": "University of Chicago - APF",
-      "manifests": [
-        {
-          "@id": "https://iiif-manifest.lib.uchicago.edu/apf/1/apf1-00001.json",
-          "@type": "sc:Manifest",
-          "label": "APF"
-        }
-      ]
-    }
-  ]
-}
-"""
+from os.path import basename, join, dirname, exists
+from pymarc import MARCReader
+from uuid import uuid4
+import magic
+from shutil import copyfile
+from urllib.parse import quote
 
 def find_all_manifests(path):
     if path.endswith("manifest.json"):
         pass
-    else: 
+    else:
         for something in scandir(path):
             if something.is_dir():
                 yield from find_all_manifests(something.path)
             elif something.is_file() and something.path.endswith(".json"):
                 yield something.path
 
+def find_matching_files(path, identifier=None):
+    for n in scandir(path):
+        if n.is_dir():
+            yield from find_matching_files(n.path, identifier=identifier)
+        elif n.is_file():
+            if identifier in n.path:
+                yield n.path
+
+def find_all_marc_records(path):
+    for n in scandir(path):
+        if n.is_dir():
+            yield from find_all_marc_records(n.path)
+        elif n.is_file() and n.path.endswith("mrc"):
+            yield n.path
+
 def main():
     arguments = ArgumentParser()
     arguments.add_argument("titles_manifest", type=str, action='store')
+    #arguments.add_argument("path_to_stuff", type=str, action='store')
     parsed_args = arguments.parse_args()
     try:
+        out = []
         data = None
         with open(parsed_args.titles_manifest, "r") as rf:
             data = json.load(rf)
-        print(type(data)
+        for n in data:
+            cho_title = n["cho_title"].split("/")[0] if "/" in n["cho_title"] else n["cho_title"]
+            matched_title = n["matched_title"].split("/")[0] if "/" in n["matched_title"] else n["matched_title"]
+            if cho_title == matched_title:
+                out = {}
+                out["@context"] = "https://iiif.io/api/presentation/2/context.json"
+                out["@id"] = "https://iiif-manifest.lib.uchicago.edu/maps/social_scientists/" + n["identifier"] + "/" + n["identifier"] + ".json"
+                out["@type"] = "sc:Manifest"
+                out["logo"] = "https://www.lib.uchicago.edu/static/base/images/color-logo.png"
+                out["attribution"] = "University of Chicago Library"
+                out["label"] = matched_title
+                out["sequences"] = []
+                a_seq = {}
+                a_seq["@id"] = out["@id"] + '/sequences/0'
+                a_seq["@type"] = "sc:Sequence"
+                a_seq["canvases"] = []
+                files = n["files"]
+                files = [x for x in files if not x.endswith(".xml")]
+                files =  [x for x in files if not  x.endswith(".mrc")]
+                for af in files:
+                    a_canvas = {}
+                    canvas_id = uuid4().urn.split(":")[-1]
+                    a_canvas["@context"] = ""
+                    a_canvas["@id"] = "http://" + canvas_id
+                    a_canvas["@type"] = "sc:Canvas"
+                    a_canvas["label"] = ""
+                    the_info = magic.from_file(af)
+                    height = [x for x in the_info if "height=" in x]
+                    width = [x for x in the_info if "width=" in x]
+                    if width and height:
+                        height = height[0].split('=')[1]
+                        width = width[0].split('=')[1]
+                        a_canvas["height"] = height
+                        a_canvas["width"] = width
+                    an_img = {}
+                    basef = basename(af)
+                    basef, extension = basef.split(".")
+                    extension = extension.lower()
+                    dest =  join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files/maps/social_scientists", n["identifier"], "tifs", basef + "." + extension)
+                    dest_dirs = dirname(dest)
+                    src = af
+                    new = "/"
+                    for new_part in dest_dirs.split("/"):
+                        new = join(new, new_part)
+                        if not exists(new):
+                            mkdir(new)
+                    copyfile(src,dest)
+                    tif_id = "maps/social_scientists/" + n["identifier"] + "/tifs/" + basef + "." + extension
+                    tif_id = quote(tif_id, safe="")
+                    an_img = {}
+                    an_img["@type"] = "oa:Annotation"
+                    an_img["motivation"] = "sc:Painting"
+                    an_img["resource"] = {}
+
+                    an_img["resource"]["@id"] = "http://iiif-server.lib.uchicago.edu/" + tif_id +  "/full/full/0/default.jpg"
+                    an_img["resource"]["service"] = {}
+                    an_img["resource"]["service"]["@context"] = "http://iiif.io/api/image/2/context.json"
+                    an_img["resource"]["service"]["@id"] = "https://iiif-server.lib.uchicago.edu/" + tif_id
+                    img_profile = {}
+                    img_profile["supports"] = ["canonicalLinkHeader", "profileLinkHeader", "mirroring", "rotationArbitrary", "regionSquare", "sizeAboveFull"]
+                    img_profile["qualities"] = ["default", "gray", "bitonal"]
+                    img_profile["format"] = ["jpg", "png", "gif", "webp"]
+                    an_img["resource"]["service"]["profile"] = ["http://iiif.io/api/image/2/level2.json", img_profile]
+                    a_canvas["images"] = [an_img]
+                    a_seq["canvases"].append(a_canvas)
+                out["sequences"].append(a_seq)
+                json_filepath = join(getcwd(), "manifests/maps/social_scientists", n["identifier"] + ".json")
+                with open(json_filepath, "w+") as wf:
+                    json.dump(out, wf, indent=4)
         """
-        collections = scandir(parsed_args.manifest_root)
-        manifest_id = uuid4().urn.split(":")[-1]
-        manifest = {}
-        manifest["@context"] = "http://iiif.io/api/presentation/2/context.json"
-        manifest["@id"] = "https://iif-collection.lib.uchicago.edu/maps/chicago-1890s-collection.json"
-        manifest["@type"] = "sc:Collection"
-        manifest["viewingHint"] = "individuals"
-        manifest["members"] = []
-        for collection in collections:
-            if collection.path.endswith("mvol"):
-                coll_label = "University Publications"
-            elif collection.path.endswith("mepa"):
-                coll_label = "Middle East Photograph Archive"
-            elif collection.path.endswith("apf"):
-                coll_label = "University Photographic Archive"
-            else:
-                coll_label = "Chicago in the 1890s"
-            coll_id = uuid4().urn.split(":")[-1]
-            a_coll = {}
-            a_coll["@id"] = "http://" + coll_id
-            a_coll["@type"] = "sc:Manifest"
-            a_coll["viewingHint"] = "multi-part"
-            a_coll["label"] = coll_label
-            gen = find_all_manifests(collection.path)
-            for n_manifest in gen:
-                json_data = json.load(open(n_manifest, "r", encoding="utf-8"))
-                if json_data.get("label", None):
-                    manifest_title = json_data["label"]
-                else:
-                    manifest_title = "Untitled"
-                a_coll["label"] = manifest_title
-                a_coll["@id"] =  "https://iiif-manifest.lib.uchicago.edu/maps/chicago_1890/" + n_manifest.split(parsed_args.manifest_root + "/")[1]
-            manifest["members"].append(a_coll)
-        with open(join(getcwd(), "manifest.json"), "w+", encoding="utf-8") as write_file:
-            json.dump(manifest, write_file, indent=4)
+        for a_cho in chos:
+            cho_metadata_file = a_cho
+            title = None
+            record = None
+            with open(cho_metadata_file, "rb") as read_file:
+                reader = MARCReader(read_file)
+                for record in reader:
+                    title = record.title()
+            matches = [x for x in titles if title in x]
+            if len(matches):
+                a_match = {}
+                a_match["cho_title"] = title
+                a_match["matched_title"] = matches[0]
+                a_match["metadata_file"] = a_cho
+                a_match["identifier"] = basename(a_cho).split(".mrc")[0]
+                a_match["files"] = [x for x in find_matching_files(parsed_args.path_to_stuff, identifier=a_match["identifier"])]
+                out.append(a_match)
+        with open(join(getcwd(), "social-scientists-matches.json"), "w+") as wf:
+            json.dump(out, wf, indent=4)
+        """
         return 0
     except KeyboardInterrupt:
         return 131
