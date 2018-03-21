@@ -34,17 +34,36 @@ def find_all_marc_records(path):
         elif n.is_file() and n.path.endswith("mrc"):
             yield n.path
 
+def find_matching_manifest(path, title=None):
+    for n in scandir(path):
+        if n.is_dir():
+            yield from find_matching_manifest(n.path, title=title)
+        elif n.is_file() and n.path.endswith(".json"):
+            data = json.load(open(n.path, "r"))
+            pot_title = data["label"]
+            if pot_title = title:
+                print(n.path)
+
+
 def main():
     arguments = ArgumentParser()
     arguments.add_argument("titles_manifest", type=str, action='store')
-    #arguments.add_argument("path_to_stuff", type=str, action='store')
+    arguments.add_argument("path_to_manifests", type=str, action='store')
     parsed_args = arguments.parse_args()
     try:
         out = []
         data = None
         with open(parsed_args.titles_manifest, "r") as rf:
             data = json.load(rf)
+        for n in data["members"]:
+            matchable_title = n.get("label")
+            relevant_manifests = find_matching_manifest(parsed_args.path_to_manifests,
+                                                        title=matchable_title)
+            m = [x for x in relevant_manifests]
+
         for n in data:
+            pass
+            """
             cho_title = n["cho_title"].split("/")[0] if "/" in n["cho_title"] else n["cho_title"]
             matched_title = n["matched_title"].split("/")[0] if "/" in n["matched_title"] else n["matched_title"]
             if cho_title == matched_title:
@@ -113,27 +132,7 @@ def main():
                 json_filepath = join(getcwd(), "manifests/maps/social_scientists", n["identifier"] + ".json")
                 with open(json_filepath, "w+") as wf:
                     json.dump(out, wf, indent=4)
-        """
-        for a_cho in chos:
-            cho_metadata_file = a_cho
-            title = None
-            record = None
-            with open(cho_metadata_file, "rb") as read_file:
-                reader = MARCReader(read_file)
-                for record in reader:
-                    title = record.title()
-            matches = [x for x in titles if title in x]
-            if len(matches):
-                a_match = {}
-                a_match["cho_title"] = title
-                a_match["matched_title"] = matches[0]
-                a_match["metadata_file"] = a_cho
-                a_match["identifier"] = basename(a_cho).split(".mrc")[0]
-                a_match["files"] = [x for x in find_matching_files(parsed_args.path_to_stuff, identifier=a_match["identifier"])]
-                out.append(a_match)
-        with open(join(getcwd(), "social-scientists-matches.json"), "w+") as wf:
-            json.dump(out, wf, indent=4)
-        """
+            """
         return 0
     except KeyboardInterrupt:
         return 131

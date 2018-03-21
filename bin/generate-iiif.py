@@ -234,7 +234,7 @@ def _main():
                     num = x.split(".tif")[0]
                     if tif_dirname == "TIFF":
                         try:
-                            num = num.split('_')[1]
+                            num = num.split('_')[-1]
                             num = num.lstrip('0')
                             pages_data.append({"number": int(num), "loc":identifier.replace('-','/') + '/' + tif_dirname + '/' + x})
                         except IndexError:
@@ -244,7 +244,13 @@ def _main():
                         pages_data.append({"number": int(num), "loc": identifier.replace('-','/') + '/' + tif_dirname + '/' + x})
 
             pages_data = sorted(pages_data, key=lambda x: x["number"])
-            for page in pages_data:
+            count = 1
+            copy = pages_data
+            for p in pages_data:
+                copy[copy.index(p)]["label"] = "Page " + str(count)
+                count += 1
+
+            for page in copy:
                 the_img = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files", page["loc"] + ".tif")
                 try:
                     img = Image.open(the_img)
@@ -256,7 +262,7 @@ def _main():
                 canvas_id = sequence_id + "/canvases/" + canvas_id
                 a_canvas["@id"] = canvas_id
                 a_canvas["@type"] = "sc:Canvas"
-                a_canvas["label" ] = "Page " + str(page["number"])
+                a_canvas["label" ] = page["label"]
                 a_canvas["height"] = height
                 a_canvas["width"] =  width
                 a_canvas["images"] = []
