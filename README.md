@@ -1,4 +1,4 @@
-# README 
+[![Build Status](https://travis-ci.org/uchicago-library/batch_generate.iiif.manifests.svg?branch=master)](https://travis-ci.org/uchicago-library/batch_generate.iiif.manifests) 
 
 ## Introduction
 
