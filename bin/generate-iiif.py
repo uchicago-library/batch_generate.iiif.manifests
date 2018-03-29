@@ -1,6 +1,8 @@
 from argparse import ArgumentParser
+import os
 from os import _exit, scandir, listdir, getcwd, mkdir
 from os.path import exists, join, dirname
+from os import path
 import json
 from PIL import Image
 import re
@@ -79,77 +81,12 @@ METADATA = {
 def _find_issues(path):
     for a_thing in scandir(path):
         if a_thing.is_dir():
-            matchable = re.compile(r"mvol[/]\d{4}[/]\d{4}[/]\d{4}$").search(a_thing.path)
+            matchable = re.compile(r"mvol[/\\]\d{4}[/\\]\d{4}[/\\]\d{4}$").search(a_thing.path)
             if matchable:
                 yield a_thing.path
             yield from _find_issues(a_thing.path)
         else:
             pass
-
-def _build_canvas_list(pages, identifier):
-    out = []
-    for page in pages:
-        """
-        if '_' in page:
-            page = page.split('_')[1]
-            page = page.lstrip('0')
-            https://iiif-server.lib.uchicago.edu/loris/mvol/0004/1918/0406/TIFF/mvol-0004-1918-0406_0002.tif/full/full/0/default.jpg
-        """
-        try:
-            original_page = page
-            id_num = str(page["number"] - 1)
-            loc = page["loc"]
-            page = page["number"]
-            a_canvas = {}
-            a_canvas["@id"] = "http://iiif-manifest.lib.uchicago.edu/" + identifier + "/canvas/c" + id_num
-            a_canvas["@type"] = "sc:Canvas"
-            a_canvas["height"] = 1000
-            a_canvas["width"] = 500
-            a_canvas["label"] = "Page " + str(page)
-            img = {}
-            img["@id"] = "http://iiif-manifest.lib.uchicago.edu/" + identifier + "/annotations/a" + id_num
-            img["@type"] = "oa:Annotation"
-            img["motivation"] = "sc:painting"
-            img["on"] = "http://iif-manifest.lib.uchicago.edu/" + identifier + "/canvas/c" + id_num
-
-            img["resource"] = {"@id": "https://iiif-server.lib.uchicago.edu/" + loc + "/full/full/0/default.jpg",
-                               "@type": "dctypes:Image",
-                               "format": "image/jpeg",
-                               "height": 1000,
-                               "width": 500,
-                              }
-            img["resource"]["profile"] = {"@context": "http://iiif.io/api/image/2/context.json", 
-                                          "@id": img["resource"]["@id"], 
-                                          "profile": [
-                                            "http://iiif.io/api/image/2/level2.json",
-                                            {"supports": [
-                                                "canonicalLinkHeader",
-                                                "profileLinkHeader",
-                                                "mirroring",
-                                                "rotationArbitrary",
-                                                "regionSquare",
-                                                "sizeAboveFull",
-                                             ],
-                                             "qualities": [
-                                                "default",
-                                                "gray",
-                                                "bitonal",
-                                             ],
-                                             "formats": [
-                                                "jpg",
-                                                "png",
-                                                "gif",
-                                                "webp",
-                                             ]
-                                            }
-                                          ]
-                                         }
-            print(img["resource"]["@id"])
-            a_canvas["images"] = [img]
-            out.append(a_canvas)
-        except ValueError:
-            next
-    return out
 
 def _main():
     arguments = ArgumentParser()
@@ -158,17 +95,17 @@ def _main():
     try:
         scanned_files = _find_issues(parsed_args.path_to_issues)
         for n in scanned_files:
-            identifier = n.split("mvol")[1]
-            identifier = identifier.split("/")
+            head, identifier = n.split("mvol")
+            identifier = path.normpath(identifier).split(os.sep)
             identifier[0] = "mvol"
             identifier_dir = '/'.join(identifier)
+            print(identifier_dir)
             real_id = '-'.join(identifier)
-            print(real_id)
-            manifest_id = "https://iiif-manifest.lib.uchicago.edu/" + join(identifier_dir, real_id + ".json")
+            manifest_id = "https://iiif-manifest.lib.uchicago.edu/" + identifier_dir + "/" + real_id + ".json"
+            print(manifest_id)
             series = identifier[0] + '-' + identifier[1]
             series_info = METADATA[series]
             title = series_info["title"]
-            description = series_info["description"]
             issue = identifier[-1].lstrip('0')
             volume = identifier[-2].lstrip('0')
             if issue == "":
@@ -249,9 +186,9 @@ def _main():
             for p in pages_data:
                 copy[copy.index(p)]["label"] = "Page " + str(count)
                 count += 1
-
             for page in copy:
-                the_img = join("/data/voldemort/digital_collections/data/ldr_oc_admin/files/IIIF_Files", page["loc"] + ".tif")
+                the_img = join(head,
+                               page["loc"] + ".tif")
                 try:
                     img = Image.open(the_img)
                     width, height = img.size
