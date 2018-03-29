@@ -21,7 +21,6 @@ setup(
              'bin/fix_image_urls.py',
              'bin/generate_apf_iiif.py',
              'bin/generate_maps_iiifs.py',
-             'bin/make_dublin_core_files.py',
              'bin/make_mvol4_collection_record.py',
              'bin/make_rac_manifests.py',
              'bin/make_speculum_collection.py',
